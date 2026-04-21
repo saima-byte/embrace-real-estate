@@ -39,7 +39,7 @@ import {
   type PipelineCard,
   type PipelineStage,
 } from "@/data/mockData";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 
 /* -------------------------------------------------------------------------- */
 /*  API layer (mock — wire to real endpoints later)                           */
@@ -211,7 +211,7 @@ const Pipeline = () => {
       // Move out of unassigned bucket
       setUnassigned((prev) => prev.filter((c) => c.id !== id));
       setCards((prev) => [...prev, { ...fromUnassigned, stage: stageId }]);
-      toast({ title: "Lead moved", description: `${fromUnassigned.title} → ${stageId}` });
+      toast.success("Lead moved", { description: `${fromUnassigned.title} → ${stageId}` });
       await api.updateStage(id, stageId);
       return;
     }
@@ -219,7 +219,7 @@ const Pipeline = () => {
     setCards((prev) => prev.map((c) => (c.id === id ? { ...c, stage: stageId } : c)));
     const moved = cards.find((c) => c.id === id);
     if (moved && moved.stage !== stageId) {
-      toast({ title: "Stage updated", description: `${moved.title} moved to ${stageId}` });
+      toast.success("Stage updated", { description: `${moved.title} moved to ${stageId}` });
       await api.updateStage(id, stageId);
     }
   };
