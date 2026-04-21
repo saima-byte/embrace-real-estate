@@ -194,6 +194,7 @@ const Pipeline = () => {
   const [agentFilter, setAgentFilter] = useState<string>("All Regional Agents");
   const [search, setSearch] = useState("");
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [revenueDeal, setRevenueDeal] = useState<CaptureRevenueDeal | null>(null);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
@@ -226,6 +227,18 @@ const Pipeline = () => {
   const activeCard =
     [...cards, ...unassigned].find((c) => c.id === activeId) ?? null;
 
+  const openRevenueModal = (card: PipelineCard, fromStage?: string) => {
+    const priceNum = parseFloat(card.price.replace(/[^0-9.]/g, ""));
+    const salePrice = isNaN(priceNum) ? 0 : Math.round(priceNum * 1_000_000);
+    setRevenueDeal({
+      leadId: card.id,
+      leadName: card.title,
+      fromStage: fromStage ?? card.stage,
+      toStage: "Closed",
+      defaults: { salePrice, commissionPct: 2.5 },
+    });
+  };
+
   const onDragStart = (e: DragStartEvent) => setActiveId(String(e.active.id));
 
   const onDragEnd = async (e: DragEndEvent) => {
@@ -239,20 +252,33 @@ const Pipeline = () => {
     const fromUnassigned = unassigned.find((c) => c.id === id);
 
     if (fromUnassigned) {
-      // Move out of unassigned bucket
       setUnassigned((prev) => prev.filter((c) => c.id !== id));
-      setCards((prev) => [...prev, { ...fromUnassigned, stage: stageId }]);
+      const next = { ...fromUnassigned, stage: stageId };
+      setCards((prev) => [...prev, next]);
       toast.success("Lead moved", { description: `${fromUnassigned.title} → ${stageId}` });
       await api.updateStage(id, stageId);
+      if (stageId === "closed") openRevenueModal(next, fromUnassigned.stage);
+      return;
+    }
+
+    const moved = cards.find((c) => c.id === id);
+    if (!moved || moved.stage === stageId) return;
+
+    // Intercept drops on Closed: open revenue modal instead of immediately moving.
+    if (stageId === "closed") {
+      openRevenueModal(moved, moved.stage);
       return;
     }
 
     setCards((prev) => prev.map((c) => (c.id === id ? { ...c, stage: stageId } : c)));
-    const moved = cards.find((c) => c.id === id);
-    if (moved && moved.stage !== stageId) {
-      toast.success("Stage updated", { description: `${moved.title} moved to ${stageId}` });
-      await api.updateStage(id, stageId);
-    }
+    toast.success("Stage updated", { description: `${moved.title} moved to ${stageId}` });
+    await api.updateStage(id, stageId);
+  };
+
+  const handleDealClosed = (payload: { leadId: string; estimatedCommission: number }) => {
+    setCards((prev) =>
+      prev.map((c) => (c.id === payload.leadId ? { ...c, stage: "closed", statusLabel: "Closed Won" } : c))
+    );
   };
 
   return (
