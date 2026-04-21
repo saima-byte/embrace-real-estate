@@ -40,6 +40,7 @@ import {
   type PipelineStage,
 } from "@/data/mockData";
 import { toast } from "sonner";
+import { CaptureRevenueModal, type CaptureRevenueDeal } from "@/components/CaptureRevenueModal";
 
 /* -------------------------------------------------------------------------- */
 /*  API layer (mock — wire to real endpoints later)                           */
@@ -62,11 +63,20 @@ const api = {
 /* -------------------------------------------------------------------------- */
 /*  Card                                                                       */
 /* -------------------------------------------------------------------------- */
-function LeadCard({ card, dragging = false }: { card: PipelineCard; dragging?: boolean }) {
+function LeadCard({
+  card,
+  dragging = false,
+  onCloseDeal,
+}: {
+  card: PipelineCard;
+  dragging?: boolean;
+  onCloseDeal?: (card: PipelineCard) => void;
+}) {
   const stageMeta = pipelineStages.find((s) => s.id === card.stage)!;
+  const canClose = card.stage !== "closed" && card.stage !== "new";
   return (
     <div
-      className={`rounded-xl border border-border bg-card p-3 shadow-soft transition ${
+      className={`group rounded-xl border border-border bg-card p-3 shadow-soft transition ${
         dragging ? "shadow-elevated ring-2 ring-accent/40" : "hover:shadow-card"
       }`}
     >
@@ -90,11 +100,30 @@ function LeadCard({ card, dragging = false }: { card: PipelineCard; dragging?: b
         </div>
         <span className="text-[11px] text-muted-foreground">{card.lastActivity}</span>
       </div>
+      {canClose && onCloseDeal && (
+        <button
+          type="button"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            onCloseDeal(card);
+          }}
+          className="mt-3 w-full rounded-md bg-gradient-primary px-2 py-1.5 text-[11px] font-semibold text-primary-foreground opacity-0 transition group-hover:opacity-100 hover:opacity-95"
+        >
+          Close Deal
+        </button>
+      )}
     </div>
   );
 }
 
-function DraggableCard({ card }: { card: PipelineCard }) {
+function DraggableCard({
+  card,
+  onCloseDeal,
+}: {
+  card: PipelineCard;
+  onCloseDeal?: (card: PipelineCard) => void;
+}) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: card.id });
   return (
     <div
@@ -103,7 +132,7 @@ function DraggableCard({ card }: { card: PipelineCard }) {
       {...attributes}
       className={`cursor-grab active:cursor-grabbing ${isDragging ? "opacity-40" : ""}`}
     >
-      <LeadCard card={card} />
+      <LeadCard card={card} onCloseDeal={onCloseDeal} />
     </div>
   );
 }
