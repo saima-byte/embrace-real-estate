@@ -40,6 +40,7 @@ import {
   type PipelineStage,
 } from "@/data/mockData";
 import { toast } from "sonner";
+import { CaptureRevenueModal, type CaptureRevenueDeal } from "@/components/CaptureRevenueModal";
 
 /* -------------------------------------------------------------------------- */
 /*  API layer (mock — wire to real endpoints later)                           */
@@ -62,11 +63,20 @@ const api = {
 /* -------------------------------------------------------------------------- */
 /*  Card                                                                       */
 /* -------------------------------------------------------------------------- */
-function LeadCard({ card, dragging = false }: { card: PipelineCard; dragging?: boolean }) {
+function LeadCard({
+  card,
+  dragging = false,
+  onCloseDeal,
+}: {
+  card: PipelineCard;
+  dragging?: boolean;
+  onCloseDeal?: (card: PipelineCard) => void;
+}) {
   const stageMeta = pipelineStages.find((s) => s.id === card.stage)!;
+  const canClose = card.stage !== "closed" && card.stage !== "new";
   return (
     <div
-      className={`rounded-xl border border-border bg-card p-3 shadow-soft transition ${
+      className={`group rounded-xl border border-border bg-card p-3 shadow-soft transition ${
         dragging ? "shadow-elevated ring-2 ring-accent/40" : "hover:shadow-card"
       }`}
     >
@@ -90,11 +100,30 @@ function LeadCard({ card, dragging = false }: { card: PipelineCard; dragging?: b
         </div>
         <span className="text-[11px] text-muted-foreground">{card.lastActivity}</span>
       </div>
+      {canClose && onCloseDeal && (
+        <button
+          type="button"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            onCloseDeal(card);
+          }}
+          className="mt-3 w-full rounded-md bg-gradient-primary px-2 py-1.5 text-[11px] font-semibold text-primary-foreground opacity-0 transition group-hover:opacity-100 hover:opacity-95"
+        >
+          Close Deal
+        </button>
+      )}
     </div>
   );
 }
 
-function DraggableCard({ card }: { card: PipelineCard }) {
+function DraggableCard({
+  card,
+  onCloseDeal,
+}: {
+  card: PipelineCard;
+  onCloseDeal?: (card: PipelineCard) => void;
+}) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: card.id });
   return (
     <div
@@ -103,7 +132,7 @@ function DraggableCard({ card }: { card: PipelineCard }) {
       {...attributes}
       className={`cursor-grab active:cursor-grabbing ${isDragging ? "opacity-40" : ""}`}
     >
-      <LeadCard card={card} />
+      <LeadCard card={card} onCloseDeal={onCloseDeal} />
     </div>
   );
 }
@@ -114,9 +143,11 @@ function DraggableCard({ card }: { card: PipelineCard }) {
 function StageColumn({
   stage,
   cards,
+  onCloseDeal,
 }: {
   stage: (typeof pipelineStages)[number];
   cards: PipelineCard[];
+  onCloseDeal?: (card: PipelineCard) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: stage.id });
   return (
@@ -142,7 +173,7 @@ function StageColumn({
       </div>
       <div className="flex flex-col gap-3">
         {cards.map((c) => (
-          <DraggableCard key={c.id} card={c} />
+          <DraggableCard key={c.id} card={c} onCloseDeal={onCloseDeal} />
         ))}
         {cards.length === 0 && (
           <div className="rounded-lg border border-dashed border-border py-6 text-center text-[11px] text-muted-foreground">
@@ -163,6 +194,7 @@ const Pipeline = () => {
   const [agentFilter, setAgentFilter] = useState<string>("All Regional Agents");
   const [search, setSearch] = useState("");
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [revenueDeal, setRevenueDeal] = useState<CaptureRevenueDeal | null>(null);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
@@ -195,6 +227,18 @@ const Pipeline = () => {
   const activeCard =
     [...cards, ...unassigned].find((c) => c.id === activeId) ?? null;
 
+  const openRevenueModal = (card: PipelineCard, fromStage?: string) => {
+    const priceNum = parseFloat(card.price.replace(/[^0-9.]/g, ""));
+    const salePrice = isNaN(priceNum) ? 0 : Math.round(priceNum * 1_000_000);
+    setRevenueDeal({
+      leadId: card.id,
+      leadName: card.title,
+      fromStage: fromStage ?? card.stage,
+      toStage: "Closed",
+      defaults: { salePrice, commissionPct: 2.5 },
+    });
+  };
+
   const onDragStart = (e: DragStartEvent) => setActiveId(String(e.active.id));
 
   const onDragEnd = async (e: DragEndEvent) => {
@@ -208,20 +252,33 @@ const Pipeline = () => {
     const fromUnassigned = unassigned.find((c) => c.id === id);
 
     if (fromUnassigned) {
-      // Move out of unassigned bucket
       setUnassigned((prev) => prev.filter((c) => c.id !== id));
-      setCards((prev) => [...prev, { ...fromUnassigned, stage: stageId }]);
+      const next = { ...fromUnassigned, stage: stageId };
+      setCards((prev) => [...prev, next]);
       toast.success("Lead moved", { description: `${fromUnassigned.title} → ${stageId}` });
       await api.updateStage(id, stageId);
+      if (stageId === "closed") openRevenueModal(next, fromUnassigned.stage);
+      return;
+    }
+
+    const moved = cards.find((c) => c.id === id);
+    if (!moved || moved.stage === stageId) return;
+
+    // Intercept drops on Closed: open revenue modal instead of immediately moving.
+    if (stageId === "closed") {
+      openRevenueModal(moved, moved.stage);
       return;
     }
 
     setCards((prev) => prev.map((c) => (c.id === id ? { ...c, stage: stageId } : c)));
-    const moved = cards.find((c) => c.id === id);
-    if (moved && moved.stage !== stageId) {
-      toast.success("Stage updated", { description: `${moved.title} moved to ${stageId}` });
-      await api.updateStage(id, stageId);
-    }
+    toast.success("Stage updated", { description: `${moved.title} moved to ${stageId}` });
+    await api.updateStage(id, stageId);
+  };
+
+  const handleDealClosed = (payload: { leadId: string; estimatedCommission: number }) => {
+    setCards((prev) =>
+      prev.map((c) => (c.id === payload.leadId ? { ...c, stage: "closed", statusLabel: "Closed Won" } : c))
+    );
   };
 
   return (
@@ -335,6 +392,7 @@ const Pipeline = () => {
                   key={stage.id}
                   stage={stage}
                   cards={filteredCards.filter((c) => c.stage === stage.id)}
+                  onCloseDeal={(card) => openRevenueModal(card)}
                 />
               ))}
             </div>
@@ -371,6 +429,13 @@ const Pipeline = () => {
           </DragOverlay>
         </DndContext>
       </div>
+
+      <CaptureRevenueModal
+        open={!!revenueDeal}
+        onOpenChange={(o) => !o && setRevenueDeal(null)}
+        deal={revenueDeal}
+        onClosed={handleDealClosed}
+      />
     </AppShell>
   );
 };
