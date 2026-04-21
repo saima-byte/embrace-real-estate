@@ -1,130 +1,376 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import {
+  DndContext,
+  DragEndEvent,
+  DragOverlay,
+  DragStartEvent,
+  PointerSensor,
+  useDraggable,
+  useDroppable,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
 import { AppShell } from "@/components/layout/AppShell";
 import { TopBar } from "@/components/layout/TopBar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Filter, ArrowUpDown, MoreHorizontal, TrendingUp } from "lucide-react";
-import { pipelineColumns } from "@/data/mockData";
-import propertyImage from "@/assets/property-penthouse.jpg";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Calendar,
+  MoreHorizontal,
+  Search,
+  TrendingUp,
+  Users,
+  Wallet,
+  UserPlus,
+} from "lucide-react";
+import {
+  agents,
+  pipelineCards,
+  pipelineStages,
+  unassignedLeads,
+  type PipelineCard,
+  type PipelineStage,
+} from "@/data/mockData";
+import { toast } from "@/hooks/use-toast";
 
+/* -------------------------------------------------------------------------- */
+/*  API layer (mock — wire to real endpoints later)                           */
+/* -------------------------------------------------------------------------- */
+const api = {
+  // GET /api/pipeline?scope=me
+  async getPipeline(_scope: "me" | "all" = "me") {
+    return [...pipelineCards];
+  },
+  // PATCH /api/leads/:id/stage
+  async updateStage(id: string, stage: PipelineStage) {
+    return { id, stage, ok: true };
+  },
+  // PATCH /api/leads/:id/assign
+  async assignLead(id: string, agent: string) {
+    return { id, agent, ok: true };
+  },
+};
+
+/* -------------------------------------------------------------------------- */
+/*  Card                                                                       */
+/* -------------------------------------------------------------------------- */
+function LeadCard({ card, dragging = false }: { card: PipelineCard; dragging?: boolean }) {
+  const stageMeta = pipelineStages.find((s) => s.id === card.stage)!;
+  return (
+    <div
+      className={`rounded-xl border border-border bg-card p-3 shadow-soft transition ${
+        dragging ? "shadow-elevated ring-2 ring-accent/40" : "hover:shadow-card"
+      }`}
+    >
+      <span
+        className={`inline-block rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${stageMeta.badgeBg} ${stageMeta.badgeText}`}
+      >
+        {card.statusLabel}
+      </span>
+      <p className="mt-2 text-sm font-semibold text-foreground">{card.title}</p>
+      <p className="mt-0.5 text-xs text-muted-foreground">{card.property}</p>
+      <div className="mt-3 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Avatar className="h-6 w-6">
+            <AvatarFallback className="bg-gradient-primary text-[9px] text-primary-foreground">
+              {card.agentInitials}
+            </AvatarFallback>
+          </Avatar>
+          <span className="text-[11px] font-medium text-muted-foreground">
+            {card.agent || "Unassigned"}
+          </span>
+        </div>
+        <span className="text-[11px] text-muted-foreground">{card.lastActivity}</span>
+      </div>
+    </div>
+  );
+}
+
+function DraggableCard({ card }: { card: PipelineCard }) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: card.id });
+  return (
+    <div
+      ref={setNodeRef}
+      {...listeners}
+      {...attributes}
+      className={`cursor-grab active:cursor-grabbing ${isDragging ? "opacity-40" : ""}`}
+    >
+      <LeadCard card={card} />
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Column                                                                     */
+/* -------------------------------------------------------------------------- */
+function StageColumn({
+  stage,
+  cards,
+}: {
+  stage: (typeof pipelineStages)[number];
+  cards: PipelineCard[];
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id: stage.id });
+  return (
+    <div
+      ref={setNodeRef}
+      className={`flex w-[280px] shrink-0 flex-col rounded-2xl bg-muted/40 p-3 transition md:w-auto ${
+        isOver ? `ring-2 ${stage.ring}` : ""
+      }`}
+    >
+      <div className="mb-3 flex items-center justify-between rounded-xl bg-card px-3 py-2 shadow-soft">
+        <div className="flex items-center gap-2">
+          <span className={`h-2 w-2 rounded-full ${stage.dot}`} />
+          <span className="text-sm font-semibold text-foreground">{stage.title}</span>
+          <span
+            className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold ${stage.badgeBg} ${stage.badgeText}`}
+          >
+            {cards.length}
+          </span>
+        </div>
+        <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground">
+          <MoreHorizontal className="h-4 w-4" />
+        </Button>
+      </div>
+      <div className="flex flex-col gap-3">
+        {cards.map((c) => (
+          <DraggableCard key={c.id} card={c} />
+        ))}
+        {cards.length === 0 && (
+          <div className="rounded-lg border border-dashed border-border py-6 text-center text-[11px] text-muted-foreground">
+            Drop here
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Page                                                                       */
+/* -------------------------------------------------------------------------- */
 const Pipeline = () => {
-  const [open, setOpen] = useState(false);
+  const [cards, setCards] = useState<PipelineCard[]>(pipelineCards);
+  const [unassigned, setUnassigned] = useState<PipelineCard[]>(unassignedLeads);
+  const [agentFilter, setAgentFilter] = useState<string>("All Regional Agents");
+  const [search, setSearch] = useState("");
+  const [activeId, setActiveId] = useState<string | null>(null);
+
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+
+  const filteredCards = useMemo(() => {
+    return cards.filter((c) => {
+      const matchAgent = agentFilter === "All Regional Agents" || c.agent === agentFilter;
+      const q = search.trim().toLowerCase();
+      const matchSearch =
+        !q ||
+        c.title.toLowerCase().includes(q) ||
+        c.property.toLowerCase().includes(q) ||
+        c.agent.toLowerCase().includes(q);
+      return matchAgent && matchSearch;
+    });
+  }, [cards, agentFilter, search]);
+
+  const totalValue = useMemo(
+    () =>
+      cards.reduce((sum, c) => {
+        const n = parseFloat(c.price.replace(/[^0-9.]/g, ""));
+        return sum + (isNaN(n) ? 0 : n);
+      }, 0),
+    [cards]
+  );
+
+  const activeLeads = cards.filter((c) => c.stage !== "closed").length;
+  const closedLeads = cards.filter((c) => c.stage === "closed").length;
+  const conversion = cards.length ? Math.round((closedLeads / cards.length) * 100) : 0;
+
+  const activeCard =
+    [...cards, ...unassigned].find((c) => c.id === activeId) ?? null;
+
+  const onDragStart = (e: DragStartEvent) => setActiveId(String(e.active.id));
+
+  const onDragEnd = async (e: DragEndEvent) => {
+    setActiveId(null);
+    const { active, over } = e;
+    if (!over) return;
+    const stageId = over.id as PipelineStage;
+    if (!pipelineStages.find((s) => s.id === stageId)) return;
+
+    const id = String(active.id);
+    const fromUnassigned = unassigned.find((c) => c.id === id);
+
+    if (fromUnassigned) {
+      // Move out of unassigned bucket
+      setUnassigned((prev) => prev.filter((c) => c.id !== id));
+      setCards((prev) => [...prev, { ...fromUnassigned, stage: stageId }]);
+      toast({ title: "Lead moved", description: `${fromUnassigned.title} → ${stageId}` });
+      await api.updateStage(id, stageId);
+      return;
+    }
+
+    setCards((prev) => prev.map((c) => (c.id === id ? { ...c, stage: stageId } : c)));
+    const moved = cards.find((c) => c.id === id);
+    if (moved && moved.stage !== stageId) {
+      toast({ title: "Stage updated", description: `${moved.title} moved to ${stageId}` });
+      await api.updateStage(id, stageId);
+    }
+  };
 
   return (
     <AppShell topBar={<TopBar searchPlaceholder="Search pipeline..." ctaLabel="Add Lead" />}>
-      <div className="mx-auto max-w-[1400px] space-y-6">
+      <div className="mx-auto max-w-[1500px] space-y-6">
+        {/* Header */}
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight text-foreground">Pipeline (V2.0)</h1>
-            <p className="mt-1 text-sm text-muted-foreground">Tracking all active opportunities across 4 stages.</p>
+            <div className="flex items-center gap-2">
+              <h1 className="text-3xl font-bold tracking-tight text-foreground">
+                Global Pipeline Management
+              </h1>
+              <span className="rounded-md bg-muted px-2 py-0.5 text-[11px] font-bold text-muted-foreground">
+                V2.0
+              </span>
+            </div>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Monitoring {cards.length.toLocaleString()} leads across 18 regional agents.
+            </p>
           </div>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" className="gap-1.5 rounded-lg">
-              <Filter className="h-3.5 w-3.5" /> Filter
-            </Button>
-            <Button variant="outline" size="sm" className="gap-1.5 rounded-lg">
-              <ArrowUpDown className="h-3.5 w-3.5" /> Sort
+
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-col">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                Viewing results for
+              </span>
+              <Select value={agentFilter} onValueChange={setAgentFilter}>
+                <SelectTrigger className="h-10 w-[200px] rounded-lg border-border bg-card text-sm font-semibold">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {agents.map((a) => (
+                    <SelectItem key={a} value={a}>
+                      {a}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <Button variant="outline" className="h-10 gap-2 rounded-lg">
+              <Calendar className="h-4 w-4" /> Last 30 Days
             </Button>
           </div>
         </div>
 
-        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
-          {pipelineColumns.map((col) => (
-            <div key={col.id} className="rounded-2xl bg-muted/40 p-3">
-              <div className="mb-3 flex items-center justify-between rounded-xl bg-card px-4 py-3 shadow-soft">
-                <div className="flex items-center gap-2">
-                  <span className={`h-2 w-2 rounded-full ${col.color}`} />
-                  <span className="text-sm font-semibold text-foreground">{col.title}</span>
-                  <span className="text-xs text-muted-foreground">({col.cards.length})</span>
-                </div>
-                <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground">
-                  <MoreHorizontal className="h-4 w-4" />
-                </Button>
-              </div>
-              <div className="space-y-3">
-                {col.cards.map((card) => (
-                  <button
-                    key={card.id}
-                    onClick={() => col.id === "warm" && setOpen(true)}
-                    className="block w-full rounded-xl bg-card p-3 text-left shadow-soft transition hover:shadow-elevated"
-                  >
-                    {col.id === "warm" && (
-                      <img src={propertyImage} alt={card.title} className="mb-3 h-24 w-full rounded-lg object-cover" loading="lazy" width={640} height={512} />
-                    )}
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <p className="text-sm font-semibold text-foreground">{card.title}</p>
-                        <p className="mt-0.5 text-xs text-muted-foreground">{card.agent}</p>
-                      </div>
-                      <span className="rounded-md bg-secondary px-2 py-0.5 text-[11px] font-bold text-foreground">{card.price}</span>
-                    </div>
-                    <div className="mt-3 flex items-center justify-between">
-                      <Avatar className="h-6 w-6">
-                        <AvatarFallback className="bg-gradient-primary text-[9px] text-primary-foreground">{card.initials}</AvatarFallback>
-                      </Avatar>
-                      {col.id === "contacted" && (
-                        <Button size="sm" onClick={() => setOpen(true)} className="h-7 rounded-md bg-gradient-primary text-[11px] text-primary-foreground hover:opacity-95">
-                          Close Deal
-                        </Button>
-                      )}
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
-          ))}
+        {/* Search */}
+        <div className="relative max-w-md">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by lead, property, or agent…"
+            className="h-10 rounded-lg pl-9"
+          />
         </div>
-      </div>
 
-      {/* Capture Revenue Modal */}
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-md rounded-2xl">
-          <DialogHeader>
-            <DialogTitle className="text-xl font-bold">Capture Revenue Data</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            Moving <span className="font-semibold text-foreground">Skyline Penthouse</span> to{" "}
-            <span className="font-semibold text-foreground">Closed</span>. Please finalize the financial details to update your sales pipeline reports.
-          </p>
-          <div className="space-y-4 pt-2">
-            <div>
-              <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Actual Sale Price</Label>
-              <div className="relative mt-1.5">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-base font-semibold text-foreground">$</span>
-                <Input defaultValue="3,850,000" className="h-11 rounded-lg pl-7 text-base font-semibold" />
+        {/* Stats */}
+        <div className="grid gap-4 md:grid-cols-3">
+          <div className="rounded-2xl bg-gradient-card-dark p-5 text-primary-foreground shadow-elevated">
+            <div className="flex items-start justify-between">
+              <div className="rounded-lg bg-white/10 p-2">
+                <Wallet className="h-5 w-5" />
               </div>
+              <span className="rounded-md bg-success/20 px-2 py-0.5 text-[11px] font-bold text-success-foreground">
+                +12.4% vs prev
+              </span>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Commission (%)</Label>
-                <Input defaultValue="2.5" className="mt-1.5 h-11 rounded-lg" />
+            <p className="mt-6 text-xs font-medium uppercase tracking-wider text-primary-foreground/70">
+              Total Pipeline Value
+            </p>
+            <p className="mt-1 text-3xl font-bold">
+              ${totalValue.toFixed(1)}M
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-border bg-card p-5 shadow-soft">
+            <div className="flex items-start justify-between">
+              <div className="rounded-lg bg-stage-contacted-bg p-2 text-stage-contacted">
+                <Users className="h-5 w-5" />
               </div>
-              <div>
-                <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Closing Date</Label>
-                <Input type="date" defaultValue="2023-10-25" className="mt-1.5 h-11 rounded-lg" />
-              </div>
+              <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                Total Volume
+              </span>
             </div>
-            <div className="rounded-lg bg-accent/5 p-3">
+            <p className="mt-6 text-3xl font-bold text-foreground">
+              {activeLeads.toLocaleString()}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">Active Leads</p>
+          </div>
+
+          <div className="rounded-2xl border border-border bg-card p-5 shadow-soft">
+            <div className="flex items-start justify-between">
+              <div className="rounded-lg bg-stage-warm-bg p-2 text-stage-warm">
+                <TrendingUp className="h-5 w-5" />
+              </div>
+              <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                Avg. Conversion
+              </span>
+            </div>
+            <p className="mt-6 text-3xl font-bold text-foreground">{conversion}%</p>
+            <p className="mt-1 text-xs text-muted-foreground">Closed / Total</p>
+          </div>
+        </div>
+
+        {/* Kanban */}
+        <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd}>
+          <div className="-mx-2 overflow-x-auto px-2 pb-2">
+            <div className="grid grid-flow-col auto-cols-[280px] gap-4 md:grid-flow-row md:auto-cols-auto md:grid-cols-3 xl:grid-cols-6">
+              {pipelineStages.map((stage) => (
+                <StageColumn
+                  key={stage.id}
+                  stage={stage}
+                  cards={filteredCards.filter((c) => c.stage === stage.id)}
+                />
+              ))}
+            </div>
+          </div>
+
+          {/* Unassigned */}
+          <section className="rounded-2xl border border-dashed border-border bg-card/60 p-4">
+            <div className="mb-3 flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <TrendingUp className="h-4 w-4 text-accent" />
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Estimated Commission</p>
-                  <p className="text-base font-bold text-foreground">$96,250.00</p>
+                <div className="rounded-lg bg-stage-warm-bg p-1.5 text-stage-warm">
+                  <UserPlus className="h-4 w-4" />
                 </div>
+                <h2 className="text-sm font-semibold text-foreground">Unassigned Leads</h2>
+                <span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-bold text-muted-foreground">
+                  {unassigned.length}
+                </span>
               </div>
+              <p className="text-xs text-muted-foreground">
+                Drag a card into a stage to assign &amp; route.
+              </p>
             </div>
-          </div>
-          <div className="flex justify-end gap-2 pt-2">
-            <Button variant="ghost" onClick={() => setOpen(false)}>Discard</Button>
-            <Button onClick={() => setOpen(false)} className="bg-gradient-primary text-primary-foreground hover:opacity-95">
-              Confirm &amp; Close Deal
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {unassigned.map((c) => (
+                <DraggableCard key={c.id} card={c} />
+              ))}
+              {unassigned.length === 0 && (
+                <p className="text-xs text-muted-foreground">All leads assigned 🎉</p>
+              )}
+            </div>
+          </section>
+
+          <DragOverlay>
+            {activeCard ? <LeadCard card={activeCard} dragging /> : null}
+          </DragOverlay>
+        </DndContext>
+      </div>
     </AppShell>
   );
 };
