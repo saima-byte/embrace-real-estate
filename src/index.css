@@ -54,6 +54,20 @@
     --status-closed: 145 55% 42%;
     --status-closed-bg: 145 60% 95%;
 
+    /* Pipeline stage colors */
+    --stage-new: 220 12% 55%;
+    --stage-new-bg: 220 20% 96%;
+    --stage-contacted: 210 90% 56%;
+    --stage-contacted-bg: 210 100% 96%;
+    --stage-warm: 35 95% 55%;
+    --stage-warm-bg: 35 100% 95%;
+    --stage-hot: 0 78% 58%;
+    --stage-hot-bg: 0 90% 96%;
+    --stage-booked: 270 70% 58%;
+    --stage-booked-bg: 270 100% 97%;
+    --stage-closed: 145 60% 42%;
+    --stage-closed-bg: 145 60% 95%;
+
     /* Gradients */
     --gradient-primary: linear-gradient(135deg, hsl(222 60% 18%), hsl(222 70% 28%));
     --gradient-card-dark: linear-gradient(135deg, hsl(222 55% 16%), hsl(222 70% 24%));

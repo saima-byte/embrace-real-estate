@@ -85,39 +85,59 @@ export const activityTimeline: ActivityEvent[] = [
   },
 ];
 
+export type PipelineStage = "new" | "contacted" | "warm" | "hot" | "booked" | "closed";
+
 export interface PipelineCard {
   id: string;
-  title: string;
-  agent: string;
-  initials: string;
+  title: string;          // Lead name
+  property: string;       // Property / location
+  statusLabel: string;    // e.g., "New Lead", "Follow Up"
+  lastActivity: string;   // e.g., "2h ago"
+  agent: string;          // Assigned agent name (empty = unassigned)
+  agentInitials: string;
   price: string;
-  image?: string;
+  stage: PipelineStage;
 }
 
-export const pipelineColumns: { id: string; title: string; color: string; cards: PipelineCard[] }[] = [
-  {
-    id: "new", title: "New", color: "bg-status-new",
-    cards: [
-      { id: "p1", title: "Modern Loft #18", agent: "Marcus Thorne", initials: "MT", price: "$1.2M" },
-      { id: "p2", title: "West Side Brownstone", agent: "Lena Park", initials: "LP", price: "$2.4M" },
-    ],
-  },
-  {
-    id: "contacted", title: "Contacted", color: "bg-status-progress",
-    cards: [
-      { id: "p3", title: "Skyline Penthouse", agent: "Sarah Jenkins", initials: "SJ", price: "$3.85M" },
-    ],
-  },
-  {
-    id: "warm", title: "Warm", color: "bg-status-assigned",
-    cards: [
-      { id: "p4", title: "East Valley Estate", agent: "David Miller", initials: "DM", price: "$5.1M" },
-    ],
-  },
-  {
-    id: "closed", title: "Closed", color: "bg-status-closed",
-    cards: [
-      { id: "p5", title: "Harbor View Condo", agent: "Elena Petrova", initials: "EP", price: "$2.9M" },
-    ],
-  },
+export interface PipelineStageMeta {
+  id: PipelineStage;
+  title: string;
+  dot: string;       // tailwind bg class for dot
+  badgeBg: string;   // tailwind bg class for count badge
+  badgeText: string; // tailwind text class for count
+  ring: string;      // ring color when dragging over
+}
+
+export const pipelineStages: PipelineStageMeta[] = [
+  { id: "new",       title: "New",       dot: "bg-stage-new",       badgeBg: "bg-stage-new-bg",       badgeText: "text-stage-new",       ring: "ring-stage-new" },
+  { id: "contacted", title: "Contacted", dot: "bg-stage-contacted", badgeBg: "bg-stage-contacted-bg", badgeText: "text-stage-contacted", ring: "ring-stage-contacted" },
+  { id: "warm",      title: "Warm",      dot: "bg-stage-warm",      badgeBg: "bg-stage-warm-bg",      badgeText: "text-stage-warm",      ring: "ring-stage-warm" },
+  { id: "hot",       title: "Hot",       dot: "bg-stage-hot",       badgeBg: "bg-stage-hot-bg",       badgeText: "text-stage-hot",       ring: "ring-stage-hot" },
+  { id: "booked",    title: "Booked",    dot: "bg-stage-booked",    badgeBg: "bg-stage-booked-bg",    badgeText: "text-stage-booked",    ring: "ring-stage-booked" },
+  { id: "closed",    title: "Closed",    dot: "bg-stage-closed",    badgeBg: "bg-stage-closed-bg",    badgeText: "text-stage-closed",    ring: "ring-stage-closed" },
+];
+
+export const agents = [
+  "All Regional Agents",
+  "Sarah Jenkins",
+  "David Miller",
+  "Lena Park",
+  "Marcus Thorne",
+  "Elena Petrova",
+];
+
+export const pipelineCards: PipelineCard[] = [
+  { id: "p1", title: "Marcus Thompson", property: "Penthouse Search • Soho", statusLabel: "New Lead", lastActivity: "2h ago", agent: "Sarah Jenkins", agentInitials: "SJ", price: "$3.2M", stage: "new" },
+  { id: "p2", title: "Elena Rodriguez", property: "Waterfront Villa • Miami", statusLabel: "New Lead", lastActivity: "5h ago", agent: "David Miller", agentInitials: "DM", price: "$5.4M", stage: "new" },
+  { id: "p3", title: "Jonathan Wu", property: "Investment Portfolio • London", statusLabel: "Follow Up", lastActivity: "Yesterday", agent: "Lena Park", agentInitials: "LP", price: "$7.8M", stage: "contacted" },
+  { id: "p4", title: "Sarah Jenkins", property: "Single Family • Austin", statusLabel: "In Negotiation", lastActivity: "3d inactive", agent: "Marcus Thorne", agentInitials: "MT", price: "$1.9M", stage: "warm" },
+  { id: "p5", title: "David Park", property: "Commercial Tower • NYC", statusLabel: "Hot Lead", lastActivity: "1h ago", agent: "Sarah Jenkins", agentInitials: "SJ", price: "$12.4M", stage: "hot" },
+  { id: "p6", title: "Priya Shah", property: "Townhouse • Brooklyn", statusLabel: "Booked Tour", lastActivity: "Today", agent: "David Miller", agentInitials: "DM", price: "$2.6M", stage: "booked" },
+  { id: "p7", title: "Harbor View Condo", property: "Closed Deal • Boston", statusLabel: "Closed Won", lastActivity: "1w ago", agent: "Elena Petrova", agentInitials: "EP", price: "$2.9M", stage: "closed" },
+];
+
+export const unassignedLeads: PipelineCard[] = [
+  { id: "u1", title: "Robert Chen", property: "Luxury Loft • Chicago", statusLabel: "New Lead", lastActivity: "30m ago", agent: "", agentInitials: "?", price: "$2.1M", stage: "new" },
+  { id: "u2", title: "Amelia Brooks", property: "Beach House • Malibu", statusLabel: "New Lead", lastActivity: "1h ago", agent: "", agentInitials: "?", price: "$6.8M", stage: "new" },
+  { id: "u3", title: "Tomás Rivera", property: "Studio • SF", statusLabel: "New Lead", lastActivity: "3h ago", agent: "", agentInitials: "?", price: "$1.4M", stage: "new" },
 ];
