@@ -392,6 +392,7 @@ const Pipeline = () => {
                   key={stage.id}
                   stage={stage}
                   cards={filteredCards.filter((c) => c.stage === stage.id)}
+                  onCloseDeal={(card) => openRevenueModal(card)}
                 />
               ))}
             </div>
@@ -428,6 +429,13 @@ const Pipeline = () => {
           </DragOverlay>
         </DndContext>
       </div>
+
+      <CaptureRevenueModal
+        open={!!revenueDeal}
+        onOpenChange={(o) => !o && setRevenueDeal(null)}
+        deal={revenueDeal}
+        onClosed={handleDealClosed}
+      />
     </AppShell>
   );
 };
