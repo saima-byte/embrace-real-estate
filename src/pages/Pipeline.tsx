@@ -143,9 +143,11 @@ function DraggableCard({
 function StageColumn({
   stage,
   cards,
+  onCloseDeal,
 }: {
   stage: (typeof pipelineStages)[number];
   cards: PipelineCard[];
+  onCloseDeal?: (card: PipelineCard) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: stage.id });
   return (
@@ -171,7 +173,7 @@ function StageColumn({
       </div>
       <div className="flex flex-col gap-3">
         {cards.map((c) => (
-          <DraggableCard key={c.id} card={c} />
+          <DraggableCard key={c.id} card={c} onCloseDeal={onCloseDeal} />
         ))}
         {cards.length === 0 && (
           <div className="rounded-lg border border-dashed border-border py-6 text-center text-[11px] text-muted-foreground">
