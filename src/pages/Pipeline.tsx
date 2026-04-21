@@ -39,7 +39,7 @@ import {
   type PipelineCard,
   type PipelineStage,
 } from "@/data/mockData";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 
 /* -------------------------------------------------------------------------- */
 /*  API layer (mock — wire to real endpoints later)                           */
