@@ -9,6 +9,7 @@ import Leads from "./pages/Leads.tsx";
 import Dashboard from "./pages/Dashboard.tsx";
 import LeadProfile from "./pages/LeadProfile.tsx";
 import Pipeline from "./pages/Pipeline.tsx";
+import AISDR from "./pages/AISDR.tsx";
 
 const queryClient = new QueryClient();
 
@@ -24,6 +25,7 @@ const App = () => (
           <Route path="/leads" element={<Leads />} />
           <Route path="/leads/:id" element={<LeadProfile />} />
           <Route path="/pipeline" element={<Pipeline />} />
+          <Route path="/ai-sdr" element={<AISDR />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

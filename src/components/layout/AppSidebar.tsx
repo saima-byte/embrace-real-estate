@@ -1,4 +1,4 @@
-import { LayoutDashboard, Users, GitBranch, BarChart3, History, HelpCircle, LogOut, UsersRound, Plus, Building2 } from "lucide-react";
+import { LayoutDashboard, Users, GitBranch, BarChart3, History, HelpCircle, LogOut, UsersRound, Plus, Building2, Workflow } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarMenu,
@@ -10,6 +10,7 @@ const items = [
   { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
   { title: "Leads", url: "/leads", icon: Users },
   { title: "Pipeline", url: "/pipeline", icon: GitBranch },
+  { title: "AI SDR Engine", url: "/ai-sdr", icon: Workflow },
   { title: "Distribution", url: "/distribution", icon: UsersRound },
   { title: "Agents", url: "/agents", icon: UsersRound },
   { title: "Analytics", url: "/analytics", icon: BarChart3 },
