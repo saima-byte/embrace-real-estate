@@ -20,11 +20,11 @@ import { toast } from "sonner";
 /* -------------------------------------------------------------------------- */
 const schema = z.object({
   salePrice: z
-    .number({ invalid_type_error: "Sale price is required" })
+    .number({ error: "Sale price is required" })
     .positive("Sale price must be greater than 0")
     .max(1_000_000_000, "Sale price seems too large"),
   commissionPct: z
-    .number({ invalid_type_error: "Commission is required" })
+    .number({ error: "Commission is required" })
     .min(0.1, "Commission must be at least 0.1%")
     .max(20, "Commission cannot exceed 20%"),
   closingDate: z
